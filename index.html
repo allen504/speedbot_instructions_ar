@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AR.js Switch Models</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.rawgit.com/jeromeetienne/ar.js/master/three.js/build/ar.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="switch-model" style="position: absolute; z-index: 1; top: 10px; left: 10px;">Switch Model</button>
+
+    <script>
+      // Set up scene, camera, and renderer
+      let scene = new THREE.Scene();
+      let camera = new THREE.Camera();
+      scene.add(camera);
+
+      let renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Initialize AR.js
+      let arToolkitSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
+      arToolkitSource.init(() => setTimeout(() => onResize(), 2000));
+      window.addEventListener('resize', () => onResize());
+
+      function onResize() {
+        arToolkitSource.onResize();
+        arToolkitSource.copySizeTo(renderer.domElement);
+        if (arToolkitContext.arController !== null) {
+          arToolkitSource.copySizeTo(arToolkitContext.arController.canvas);
+        }
+      }
+
+      let arToolkitContext = new THREEx.ArToolkitContext({
+        cameraParametersUrl: 'https://jeromeetienne.github.io/AR.js/data/camera_para.dat',
+        detectionMode: 'mono',
+      });
+      arToolkitContext.init(() => camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix()));
+
+      // Set up marker controls
+      let markerControls = new THREEx.ArMarkerControls(arToolkitContext, camera, {
+        type: 'pattern',
+        patternUrl: 'https://jeromeetienne.github.io/AR.js/data/patt.hiro',
+        changeMatrixMode: 'cameraTransformMatrix',
+      });
+
+      // Global variables
+      let currentModel = null;
+      let currentModelUrl = 'path/to/model1.glb';  // Keep track of current model
+      let animateMixers = [];
+
+      // Function to load a new model
+      function loadModel(modelUrl) {
+        if (currentModel) {
+          scene.remove(currentModel);
+        }
+
+        const loader = new THREE.GLTFLoader();
+        loader.load(modelUrl, (gltf) => {
+          currentModel = gltf.scene;
+          currentModel.scale.set(0.5, 0.5, 0.5);
+          currentModel.position.y = 0.5;
+          scene.add(currentModel);
+
+          // Handle animations if present
+          if (gltf.animations.length > 0) {
+            let mixer = new THREE.AnimationMixer(currentModel);
+            let action = mixer.clipAction(gltf.animations[0]);
+            action.play();
+            animateMixers.push(mixer);  // Add mixer to be updated
+          }
+        });
+      }
+
+      // Initial model load
+      loadModel(currentModelUrl);
+
+      // Set up button to switch models
+      document.getElementById('switch-model').addEventListener('click', () => {
+        if (currentModelUrl === 'path/to/model1.glb') {
+          loadModel('path/to/model2.glb');
+          currentModelUrl = 'path/to/model2.glb';
+        } else {
+          loadModel('path/to/model1.glb');
+          currentModelUrl = 'path/to/model1.glb';
+        }
+      });
+
+      // Animation loop
+      let clock = new THREE.Clock();
+      function animate() {
+        requestAnimationFrame(animate);
+
+        if (arToolkitSource.ready) {
+          arToolkitContext.update(arToolkitSource.domElement);
+        }
+
+        const delta = clock.getDelta();
+        animateMixers.forEach(mixer => {
+          mixer.update(delta);
+        });
+
+        renderer.render(scene, camera);
+      }
+      animate();
+    </script>
+  </body>
+</html>
